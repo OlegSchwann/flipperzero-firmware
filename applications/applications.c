@@ -41,6 +41,7 @@ extern int32_t vibro_test_app(void* p);
 
 // Plugins
 extern int32_t music_player_app(void* p);
+extern int32_t nokia_snake_app(void* p);
 
 // On system start hooks declaration
 extern void bt_cli_init();
@@ -201,6 +202,10 @@ const FlipperApplication FLIPPER_PLUGINS[] = {
 
 #ifdef APP_MUSIC_PLAYER
     {.app = music_player_app, .name = "Music Player", .stack_size = 1024, .icon = &A_Plugins_14},
+#endif
+
+#ifdef APP_NOKIA_SNAKE
+    {.app = nokia_snake_app, .name = "Snake Game", .stack_size = 1024, .icon = &A_Plugins_14}, // TODO: How does icon work here?
 #endif
 };
 
