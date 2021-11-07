@@ -5,19 +5,62 @@
 #include <input/input.h>
 
 typedef struct {
-    // TODO: describe state here
-    // TODO: потом тут будет форма змейки, однозначно определяющая отрисовываемый кадр
-    uint64_t _;
+//    +-----x
+//    |
+//    |
+//    y
+    uint8_t x;
+    uint8_t y;
+} point;
+
+typedef enum {
+    life,
+
+    // https://melmagazine.com/en-us/story/snake-nokia-6110-oral-history-taneli-armanto
+    // Armanto: While testing the early versions of the game, I noticed it was hard
+    // to control the snake upon getting close to and edge but not crashing — especially
+    // in the highest speed levels. I wanted the highest level to be as fast as I could
+    // possibly make the device “run,” but on the other hand, I wanted to be friendly
+    // and help the player manage that level. Otherwise it might not be fun to play. So
+    // I implemented a little delay. A few milliseconds of extra time right before
+    // the player crashes, during which she can still change the directions. And if
+    // she does, the game continues.
+    lastChance,
+
+    gameOver,
+    win,
+} GameState;
+
+typedef struct {
+    point points[225];
+    uint16_t len;
+    point fruit;
+    GameState state;
 } SnakeState;
 
 static void render_callback(Canvas* canvas, void* ctx) {
-    // Screen is 128x64 px
-
     SnakeState *snake_state = acquire_mutex((ValueMutex*)ctx, 25);
+    if (snake_state == NULL) {
+        return;
+    }
 
     canvas_clear(canvas);
     canvas_set_color(canvas, ColorBlack);
     canvas_draw_frame(canvas, 0, 0, 128, 64);
+
+    {
+        point f = snake_state->fruit;
+        f.x = f.x * 4 + 2;
+        f.y = f.y * 4 + 2;
+        canvas_draw_rbox(canvas, f.x, f.y, 6, 6, 2);
+    }
+
+    for (uint16_t i = 0; i < snake_state->len; i++) {
+        point p = snake_state->points[i];
+        p.x = p.x * 4 + 2;
+        p.y = p.y * 4 + 2;
+        canvas_draw_box(canvas, p.x, p.y, 4, 4);
+    }
 
     release_mutex((ValueMutex*)ctx, snake_state);
 }
@@ -32,7 +75,12 @@ int32_t nokia_snake_app(void* p) {
     osMessageQueueId_t event_queue = osMessageQueueNew(8, sizeof(InputEvent), NULL);
 
     // TODO: состояние змейки, определяющее кадр
-    SnakeState snake_state;
+    SnakeState snake_state = {
+        .points = {{2,6},{3,6},{4,6},{5,6},{6,6},{7,6},{8,6}},
+        .len = 7,
+        .fruit = {18, 6},
+        .state = life,
+    };
 
     ValueMutex state_mutex;
     if(!init_mutex(&state_mutex, &snake_state, sizeof(snake_state))) {
@@ -104,53 +152,25 @@ int32_t nokia_snake_app(void* p) {
     return 0;
 }
 
-// 128, 64
-// (4 + 2) * 21 + 2border == 128
-// 128 / 6 = 21
-// (4 + 2) * 10 + 2 + 2border == 64
-// 64 / 6 = 10
-
-// snake node
-// 000000
-// 011110
-// 011110
-// 011110
-// 011110
-// 000000
-// TODO: задать такой каждому состоянию ниже
-
-// просто буффер 210 байт
-// в нем состояния в виде цифр
-
-/*
-' ' '○'
-'┏' '┓' '┗' '┛' '┃'
-'╴' '╸' '╾' '━' '╼' '╺' '╶' left
-'╴' '╸' '╾' '━' '╼' '╺' '╶' right
-'╷' '╻' '╽' '┃' '╿' '╹' '╵' up
-'╷' '╻' '╽' '┃' '╿' '╹' '╵' down
-'┍' '┙' '┎' '┚' '┒' '┖' '┕' '┑'
- */
-
-// неполные состояния используются для анимации
-
-// вся змейка это машина состояний, применяемая к каждой клетке буфера
-// только состояния '╸' '╺' '╻' '╹' вычитывают событие нажатия кнопки
-// TODO: записать все возможные переходы состояний
-// сначала в виде чепочек переходов, потом уже в виде асоциативного массива потом в виде switch/case
-
-/*
-┌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐
-╎┏━━━━━━━━━┓          ╎
-╎┃┏╾ ○     ╵          ╎
-╎┃┃                   ╎
-╎┃┃                   ╎
-╎┗┛                   ╎
-╎                     ╎
-╎       ○             ╎
-╎                     ╎
-╎             ○       ╎
-╎                     ╎
-└╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
-*/
-
+// Screen is 128x64 px
+// (4 + 4) * 16 - 4 + 2 + 2border == 128
+// (4 + 4) * 8 - 4 + 2 + 2border == 64
+// Game field from point{x:  0, y: 0} to point{x: 30, y: 14}.
+// The snake turns only in even cells - intersections.
+// ┌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┐
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
+// ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
+// └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
