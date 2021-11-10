@@ -1,8 +1,8 @@
 #include <furi.h>
 #include <furi-hal.h>
-
 #include <gui/gui.h>
 #include <input/input.h>
+#include <stdlib.h>
 
 typedef struct {
     //    +-----x
@@ -20,15 +20,14 @@ typedef enum {
     // Armanto: While testing the early versions of the game, I noticed it was hard
     // to control the snake upon getting close to and edge but not crashing — especially
     // in the highest speed levels. I wanted the highest level to be as fast as I could
-    // possibly make the device “run,” but on the other hand, I wanted to be friendly
+    // possibly make the device "run," but on the other hand, I wanted to be friendly
     // and help the player manage that level. Otherwise it might not be fun to play. So
     // I implemented a little delay. A few milliseconds of extra time right before
     // the player crashes, during which she can still change the directions. And if
     // she does, the game continues.
-    lastChance,
+    // lastChance, // TODO: Do we need it?
 
     gameOver,
-    win,
 } GameState;
 
 typedef enum {
@@ -39,7 +38,7 @@ typedef enum {
 } Direction;
 
 typedef struct {
-    Point points[225];
+    Point points[253];
     uint16_t len;
     Direction currentMovement;
     Direction nextMovement; // if backward of currentMovement, ignore
@@ -55,15 +54,17 @@ static void render_callback(Canvas* canvas, void* ctx) {
 
     canvas_clear(canvas);
     canvas_set_color(canvas, ColorBlack);
+
+    // Frame
     canvas_draw_frame(canvas, 0, 0, 128, 64);
 
-    {
-        Point f = snake_state->fruit;
-        f.x = f.x * 4 + 1;
-        f.y = f.y * 4 + 1;
-        canvas_draw_rframe(canvas, f.x, f.y, 6, 6, 2);
-    }
+    // Fruit
+    Point f = snake_state->fruit;
+    f.x = f.x * 4 + 1;
+    f.y = f.y * 4 + 1;
+    canvas_draw_rframe(canvas, f.x, f.y, 6, 6, 2);
 
+    // Snake
     for(uint16_t i = 0; i < snake_state->len; i++) {
         Point p = snake_state->points[i];
         p.x = p.x * 4 + 2;
@@ -71,26 +72,41 @@ static void render_callback(Canvas* canvas, void* ctx) {
         canvas_draw_box(canvas, p.x, p.y, 4, 4);
     }
 
+    // Game Over banner
+    if(snake_state->state == gameOver) {
+        // Screen is 128x64 px
+        canvas_set_color(canvas, ColorWhite);
+        canvas_draw_box(canvas, 34, 20, 62, 24);
+
+        canvas_set_color(canvas, ColorBlack);
+        canvas_draw_frame(canvas, 34, 20, 62, 24);
+
+        canvas_set_font(canvas, FontPrimary);
+        canvas_draw_str(canvas, 37, 31, "Game Over");
+
+        canvas_set_font(canvas, FontSecondary);
+        char buffer[12];
+        sprintf(buffer, "Score: %u", snake_state->len - 7);
+        canvas_draw_str_aligned(canvas, 64, 41, AlignCenter, AlignBottom, buffer);
+    }
+
     release_mutex((ValueMutex*)ctx, snake_state);
 }
 
 static void input_callback(InputEvent* input_event, void* ctx) {
-    osMessageQueueId_t event_queue = ctx;
-
-    osMessageQueuePut(event_queue, input_event, 0, 0);
+    osMessageQueuePut((osMessageQueueId_t)ctx, input_event, 0, 0);
 }
 
-void placeNewFruit(SnakeState* snake_state, int random){
-    printf("placeNewFruit\r\n");
+void place_new_fruit(SnakeState* snake_state) {
     // 1 bit for each point on the playing field where the snake can turn and where the fruit can appear
     uint16_t buffer[8];
     memset(buffer, 0, sizeof(buffer));
     uint8_t empty = 8 * 16;
 
-    for (uint16_t i = 0; i < snake_state->len; i++) {
+    for(uint16_t i = 0; i < snake_state->len; i++) {
         Point p = snake_state->points[i];
 
-        if (p.x % 2 != 0 || p.y % 2 != 0) {
+        if(p.x % 2 != 0 || p.y % 2 != 0) {
             continue;
         }
         p.x /= 2;
@@ -99,14 +115,15 @@ void placeNewFruit(SnakeState* snake_state, int random){
         buffer[p.y] |= 1 << p.x;
         empty--;
     }
-    // bit set if snake use that playing field
+    // Bit set if snake use that playing field
 
-    uint16_t newFruit = random % empty;
+    uint16_t newFruit = rand() % empty;
 
-    for (uint8_t y = 0; y < 8; y++) {
-        for (uint16_t x = 0, mask = 1; x < 16; x += 1, mask <<= 1) {
-            if ((buffer[y] & mask) == 0) {
-                if (newFruit == 0) {
+    // Skip random number of _empty_ fields
+    for(uint8_t y = 0; y < 8; y++) {
+        for(uint16_t x = 0, mask = 1; x < 16; x += 1, mask <<= 1) {
+            if((buffer[y] & mask) == 0) {
+                if(newFruit == 0) {
                     snake_state->fruit.x = x * 2;
                     snake_state->fruit.y = y * 2;
                     return;
@@ -118,9 +135,31 @@ void placeNewFruit(SnakeState* snake_state, int random){
     // We will never be here
 }
 
+bool collision_with_frame(Point next_step) {
+    // if x == 0 && currentMovement == left then x - 1 == 255 ,
+    // so check only x > right border
+    return next_step.x > 30 || next_step.y > 14;
+}
+
+bool collision_with_tail(SnakeState* snake_state, Point next_step) {
+    for(uint16_t i = 0; i < snake_state->len; i++) {
+        Point p = snake_state->points[i];
+        if(p.x == next_step.x && p.y == next_step.y) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// TODO: разбть эту простыню на функции.
 void process_game_step(SnakeState* snake_state) {
-    bool canTurn = (snake_state->points[0].x % 2 == 0) && (snake_state->points[0].y % 2 == 0);
-    if(canTurn) {
+    if(snake_state->state == gameOver) {
+        return;
+    }
+
+    bool can_turn = (snake_state->points[0].x % 2 == 0) && (snake_state->points[0].y % 2 == 0);
+    if(can_turn) {
         switch(snake_state->currentMovement) {
         case up:
             switch(snake_state->nextMovement) {
@@ -189,21 +228,21 @@ void process_game_step(SnakeState* snake_state) {
         break;
     }
 
-    if (next_step.x == snake_state->fruit.x && next_step.y == snake_state->fruit.y) {
-        snake_state->len++;
-        if (snake_state->len >= 253) { // согласовать днинну буфера и максимальную выигрышную длину змейки
-            snake_state->state = win;
-            return;
-        }
-
-        placeNewFruit(snake_state, rand());
+    bool crush = collision_with_frame(next_step) || collision_with_tail(snake_state, next_step);
+    if(crush) {
+        snake_state->state = gameOver;
+        return;
     }
 
-    // TODO: написать логику коллизий
-    //  со стенами,
-    //  c хвостом,
-    //  с фруктом. +
-
+    // коллизия с фруктом
+    bool eatFruit = (next_step.x == snake_state->fruit.x) && (next_step.y == snake_state->fruit.y);
+    if(eatFruit) {
+        snake_state->len++;
+        if(snake_state->len >= 253) {
+            snake_state->state = gameOver;
+            return;
+        }
+    }
 
     memmove(
         snake_state->points + 1,
@@ -211,18 +250,21 @@ void process_game_step(SnakeState* snake_state) {
         snake_state->len * sizeof(*(snake_state->points)));
     snake_state->points[0] = next_step;
 
+    if(eatFruit) {
+        place_new_fruit(snake_state);
+    }
 }
 
 void game_logic_thread(void* ctx) {
     for(;;) {
+        delay(200);
+
         SnakeState* snake_state = acquire_mutex((ValueMutex*)ctx, 25);
         if(snake_state == NULL) {
             continue;
         }
         process_game_step(snake_state);
         release_mutex((ValueMutex*)ctx, snake_state);
-
-        delay(200);
     }
 }
 
@@ -252,7 +294,6 @@ int32_t nokia_snake_app(void* p) {
     Gui* gui = furi_record_open("gui");
     gui_add_view_port(gui, view_port, GuiLayerFullscreen);
 
-    // start game ligic thread
     // TODO: change to fuirac_start after same in '../music-player/music-player.c'
     osThreadAttr_t snake_logic_attr = {.name = "snake_logic_thread", .stack_size = 512};
     osThreadId_t game_logic = osThreadNew(game_logic_thread, &state_mutex, &snake_logic_attr);
@@ -332,3 +373,4 @@ exit_loop:
 // ╎ ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪   ▪ ╎
 // ╎ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ▪ ╎
 // └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘
+
