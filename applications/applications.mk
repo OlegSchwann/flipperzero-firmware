@@ -36,6 +36,7 @@ APP_ABOUT	= 1
 # Plugins
 APP_MUSIC_PLAYER = 1
 APP_SNAKE_GAME = 1
+APP_GAME_2048 = 1
 
 # Debug
 APP_ACCESSOR = 1
@@ -189,6 +190,12 @@ endif
 APP_SNAKE_GAME ?= 0
 ifeq ($(APP_SNAKE_GAME), 1)
 CFLAGS		+= -DAPP_SNAKE_GAME
+SRV_GUI		= 1
+endif
+
+APP_GAME_2048 ?= 0
+ifeq ($(APP_GAME_2048), 1)
+CFLAGS		+= -DAPP_GAME_2048
 SRV_GUI		= 1
 endif
 
