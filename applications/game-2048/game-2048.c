@@ -246,7 +246,7 @@ static void game_2048_process_move(GameState *const game_state) {
     // down
     if (game_state->direction == DirectionDown) {
         for(uint8_t x = 0; x < 4; x++) {
-            uint8_t next_y = 0;
+            uint8_t next_y = 3;
             for(int8_t y = 3; y >= 0; y--) {
                 uint8_t field = game_state->field[y][x];
                 if (field == 0) {
@@ -269,6 +269,9 @@ static void game_2048_process_move(GameState *const game_state) {
             }  
         }
     }
+
+    // 0, 0, 1, 1
+    // 1, 0, 0, 0
 
     // left
     if (game_state->direction == DirectionLeft) {
