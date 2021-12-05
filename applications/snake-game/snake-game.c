@@ -57,8 +57,8 @@ typedef struct {
     InputEvent input;
 } SnakeEvent;
 
-static void snake_game_render_callback(Canvas* const canvas, void* ctx) {
-    const SnakeState* snake_state = acquire_mutex((ValueMutex*)ctx, 25);
+static void snake_game_draw_callback(Canvas *const canvas, ValueMutex *const vm) {
+    const SnakeState* snake_state = acquire_mutex(vm, 25);
     if(snake_state == NULL) {
         return;
     }
@@ -100,7 +100,7 @@ static void snake_game_render_callback(Canvas* const canvas, void* ctx) {
         canvas_draw_str_aligned(canvas, 64, 41, AlignCenter, AlignBottom, buffer);
     }
 
-    release_mutex((ValueMutex*)ctx, snake_state);
+    release_mutex(vm, snake_state);
 }
 
 static void snake_game_input_callback(InputEvent* input_event, osMessageQueueId_t event_queue) {
@@ -313,6 +313,8 @@ static void snake_game_process_game_step(SnakeState* const snake_state) {
 }
 
 int32_t snake_game_app(void* p) {
+    int32_t return_code = 0;
+
     srand(DWT->CYCCNT);
 
     osMessageQueueId_t event_queue = osMessageQueueNew(8, sizeof(SnakeEvent), NULL);
@@ -322,13 +324,12 @@ int32_t snake_game_app(void* p) {
 
     ValueMutex state_mutex;
     if(!init_mutex(&state_mutex, snake_state, sizeof(SnakeState))) {
-        furi_log_print(FURI_LOG_ERROR, "cannot create mutex\r\n");
-        free(snake_state);
-        return 255;
+        return_code = 255;
+        goto free_and_exit;
     }
 
     ViewPort* view_port = view_port_alloc();
-    view_port_draw_callback_set(view_port, snake_game_render_callback, &state_mutex);
+    view_port_draw_callback_set(view_port, (ViewPortDrawCallback)snake_game_draw_callback, &state_mutex);
     view_port_input_callback_set(view_port, snake_game_input_callback, event_queue);
 
     osTimerId_t timer =
@@ -388,11 +389,13 @@ int32_t snake_game_app(void* p) {
     gui_remove_view_port(gui, view_port);
     furi_record_close("gui");
     view_port_free(view_port);
-    osMessageQueueDelete(event_queue);
     delete_mutex(&state_mutex);
+
+free_and_exit:
+    osMessageQueueDelete(event_queue);
     free(snake_state);
 
-    return 0;
+    return return_code;
 }
 
 // Screen is 128x64 px

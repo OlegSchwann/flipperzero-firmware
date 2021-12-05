@@ -59,7 +59,7 @@ typedef struct {
     uint8_t next_field[4][4];
 
     Direction direction;
- /*
+    /*
     field {
         animation-timing-function: linear;
         animation-duration: 300ms;
@@ -73,7 +73,12 @@ typedef struct {
 
 } GameState;
 
-static void game_2048_render_callback(Canvas *const canvas, ValueMutex *const vm) {
+
+#define XtoPx(x) (33 + x * 15)
+
+#define YtoPx(x) (1 + y * 15)
+
+static void game_2048_render_callback(Canvas* const canvas, ValueMutex* const vm) {
     const GameState* game_state = acquire_mutex(vm, 25);
     if(game_state == NULL) {
         return;
@@ -81,21 +86,36 @@ static void game_2048_render_callback(Canvas *const canvas, ValueMutex *const vm
 
     // Before the function is called, the state is set with the canvas_reset(canvas)
 
-    canvas_draw_frame(canvas, 0, 0, 16, 16);
-    DrawNumberFor2048(canvas, 30, 30, 64);
-    DrawNumberFor2048(canvas, 40, 40, 1024);
+    if(game_state->direction == DirectionIdle) {
+        for(uint8_t y = 0; y < 4; y++) {
+            for(uint8_t x = 0; x < 4; x++) {
+                uint8_t field = game_state->field[y][x];
+                canvas_set_color(canvas, ColorBlack);
+                canvas_draw_frame(canvas, XtoPx(x), YtoPx(y), 16, 16);
+                if(field != 0) {
+                    DrawNumberFor2048(canvas, 30, 30, 1 << field);
+                }
+            }
+        }
+    } else { // if animation
+        // for animation
+        // (osKernelGetSysTimerCount() - game_state->animation_start_ticks) / osKernelGetSysTimerFreq();
 
-    // for animation
-    // (osKernelGetSysTimerCount() - game_state->animation_start_ticks) / osKernelGetSysTimerFreq();
+        // TODO: end animation event/callback/set AnimationIdle
+    }
 
     release_mutex(vm, game_state);
 }
 
-static void game_2048_input_callback(const InputEvent *const input_event, const osMessageQueueId_t event_queue) {
+static void game_2048_input_callback(
+    const InputEvent* const input_event,
+    const osMessageQueueId_t event_queue) {
     furi_assert(event_queue);
 
     osMessageQueuePut(event_queue, input_event, 0, osWaitForever);
 }
+
+// static void game_2048_set_new_number(GameState *const game_state){}
 
 int32_t game_2048_app(void* p) {
     int32_t return_code = 0;
@@ -104,6 +124,29 @@ int32_t game_2048_app(void* p) {
 
     GameState* game_state = furi_alloc(sizeof(GameState));
 
+    // <debug>
+    game_state->direction = DirectionIdle;
+    game_state->field[0][0] = 0;
+    game_state->field[0][1] = 1;
+    game_state->field[0][2] = 2;
+    game_state->field[0][3] = 3;
+
+    game_state->field[1][0] = 4;
+    game_state->field[1][1] = 5;
+    game_state->field[1][2] = 6;
+    game_state->field[1][3] = 7;
+    
+    game_state->field[2][0] = 8;
+    game_state->field[2][1] = 9;
+    game_state->field[2][2] = 10;
+    game_state->field[2][3] = 11;
+    
+    game_state->field[3][0] = 0;
+    game_state->field[3][1] = 0;
+    game_state->field[3][2] = 0;
+    game_state->field[3][3] = 0;
+    // </debug>
+
     ValueMutex state_mutex;
     if(!init_mutex(&state_mutex, game_state, sizeof(GameState))) {
         return_code = 255;
@@ -111,8 +154,10 @@ int32_t game_2048_app(void* p) {
     }
 
     ViewPort* view_port = view_port_alloc();
-    view_port_draw_callback_set(view_port, (ViewPortDrawCallback)game_2048_render_callback, &state_mutex);
-    view_port_input_callback_set(view_port, (ViewPortInputCallback)game_2048_input_callback, event_queue);
+    view_port_draw_callback_set(
+        view_port, (ViewPortDrawCallback)game_2048_render_callback, &state_mutex);
+    view_port_input_callback_set(
+        view_port, (ViewPortInputCallback)game_2048_input_callback, event_queue);
 
     Gui* gui = furi_record_open("gui");
     gui_add_view_port(gui, view_port, GuiLayerFullscreen);
@@ -125,20 +170,15 @@ int32_t game_2048_app(void* p) {
         if(event_status == osOK) {
             if(event.type == InputTypePress) {
                 switch(event.key) {
-                case InputKeyUp:
-                    ;
+                case InputKeyUp:;
                     break;
-                case InputKeyDown:
-                    ;
+                case InputKeyDown:;
                     break;
-                case InputKeyRight:
-                    ;
+                case InputKeyRight:;
                     break;
-                case InputKeyLeft:
-                    ;
+                case InputKeyLeft:;
                     break;
-                case InputKeyOk:
-                    ; // TODO: reinit in game ower state 
+                case InputKeyOk:; // TODO: reinit in game ower state
                     break;
                 case InputKeyBack:
                     loop = false;
