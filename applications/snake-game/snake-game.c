@@ -157,22 +157,20 @@ static Point snake_game_get_new_fruit(SnakeState const* const snake_state) {
     uint16_t newFruit = rand() % empty;
 
     // Skip random number of _empty_ fields
+    Point p = {0, 0};
     for(uint8_t y = 0; y < 8; y++) {
         for(uint16_t x = 0, mask = 1; x < 16; x += 1, mask <<= 1) {
             if((buffer[y] & mask) == 0) {
                 if(newFruit == 0) {
-                    Point p = {
-                        .x = x * 2,
-                        .y = y * 2,
-                    };
-                    return p;
+                    p.x = x * 2;
+                    p.y = y * 2;
+                    goto exit;
                 }
                 newFruit--;
             }
         }
     }
-    // We will never be here
-    Point p = {0, 0};
+ exit:   
     return p;
 }
 

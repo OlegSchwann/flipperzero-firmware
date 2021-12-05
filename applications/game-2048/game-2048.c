@@ -93,7 +93,7 @@ static void game_2048_render_callback(Canvas* const canvas, ValueMutex* const vm
                 canvas_set_color(canvas, ColorBlack);
                 canvas_draw_frame(canvas, XtoPx(x), YtoPx(y), 16, 16);
                 if(field != 0) {
-                    DrawNumberFor2048(canvas, 30, 30, 1 << field);
+                    DrawNumberFor2048(canvas, XtoPx(x), YtoPx(y), 1 << field);
                 }
             }
         }
@@ -115,7 +115,72 @@ static void game_2048_input_callback(
     osMessageQueuePut(event_queue, input_event, 0, osWaitForever);
 }
 
-// static void game_2048_set_new_number(GameState *const game_state){}
+// if return false then Game Over
+static bool game_2048_set_new_number(GameState *const game_state){
+    uint8_t empty = 0;
+    for(uint8_t y = 0; y < 4; y++) {
+        for(uint8_t x = 0; x < 4; x++) {
+            if (game_state->field[y][x] == 0){
+                empty++;
+            }
+        }
+    }
+
+    if (empty == 0) {
+        return false;
+    }
+
+    if (empty == 0) {
+        // If it is 1 move before losing, we help the player and get rid of randomness.
+        for(uint8_t y = 0; y < 4; y++) {
+            for(uint8_t x = 0; x < 4; x++) {
+                if (game_state->field[y][x] == 0) {
+                    bool haveFour =
+                    // +----X
+                    // |
+                    // |  field[x][y], 0 <= x, y <= 3
+                    // Y
+                    
+                    // up == 4 or
+                    (y > 0 && game_state->field[y - 1][x] == 2) ||
+                    // right == 4 or
+                    (x < 3 && game_state->field[y][x + 1] == 2) ||
+                    // down == 4
+                    (y < 3 && game_state->field[y + 1][x] == 2) ||
+                    // left == 4
+                    (x > 0 && game_state->field[y][x - 1] == 2);
+                    
+
+                    if (haveFour) {
+                        game_state->field[y][x] = 2;
+                        return true;
+                    }
+
+                    game_state->field[y][x] = 1;
+                    return true;
+                }
+            }
+        }
+    }
+
+    uint8_t target = rand() % empty;
+    uint8_t twoOrFore = rand() % 4 < 3;
+    for(uint8_t y = 0; y < 4; y++) {
+        for(uint8_t x = 0; x < 4; x++) {
+            if (target == 0) {
+                if (twoOrFore) {
+                    game_state->field[y][x] = 1; // 2^1 == 2  75%
+                } else {
+                    game_state->field[y][x] = 2; // 2^2 == 4  25%
+                }
+                goto exit;
+            }
+            target--;
+        }
+    }
+exit:
+    return true;
+}
 
 int32_t game_2048_app(void* p) {
     int32_t return_code = 0;
@@ -124,8 +189,26 @@ int32_t game_2048_app(void* p) {
 
     GameState* game_state = furi_alloc(sizeof(GameState));
 
+    ValueMutex state_mutex;
+    if(!init_mutex(&state_mutex, game_state, sizeof(GameState))) {
+        return_code = 255;
+        goto free_and_exit;
+    }
+
+    ViewPort* view_port = view_port_alloc();
+    view_port_draw_callback_set(
+        view_port, (ViewPortDrawCallback)game_2048_render_callback, &state_mutex);
+    view_port_input_callback_set(
+        view_port, (ViewPortInputCallback)game_2048_input_callback, event_queue);
+
+    Gui* gui = furi_record_open("gui");
+    gui_add_view_port(gui, view_port, GuiLayerFullscreen);
+
+    game_state->direction = DirectionIdle;    
+    game_2048_set_new_number(game_state);
+    game_2048_set_new_number(game_state);
+
     // <debug>
-    game_state->direction = DirectionIdle;
     game_state->field[0][0] = 0;
     game_state->field[0][1] = 1;
     game_state->field[0][2] = 2;
@@ -146,21 +229,6 @@ int32_t game_2048_app(void* p) {
     game_state->field[3][2] = 0;
     game_state->field[3][3] = 0;
     // </debug>
-
-    ValueMutex state_mutex;
-    if(!init_mutex(&state_mutex, game_state, sizeof(GameState))) {
-        return_code = 255;
-        goto free_and_exit;
-    }
-
-    ViewPort* view_port = view_port_alloc();
-    view_port_draw_callback_set(
-        view_port, (ViewPortDrawCallback)game_2048_render_callback, &state_mutex);
-    view_port_input_callback_set(
-        view_port, (ViewPortInputCallback)game_2048_input_callback, event_queue);
-
-    Gui* gui = furi_record_open("gui");
-    gui_add_view_port(gui, view_port, GuiLayerFullscreen);
 
     InputEvent event;
     for(bool loop = true; loop;) {
