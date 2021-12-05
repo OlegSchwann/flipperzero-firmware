@@ -73,7 +73,6 @@ typedef struct {
 
 } GameState;
 
-
 #define XtoPx(x) (33 + x * 15)
 
 #define YtoPx(x) (1 + y * 15)
@@ -116,42 +115,41 @@ static void game_2048_input_callback(
 }
 
 // if return false then Game Over
-static bool game_2048_set_new_number(GameState *const game_state){
+static bool game_2048_set_new_number(GameState* const game_state) {
     uint8_t empty = 0;
     for(uint8_t y = 0; y < 4; y++) {
         for(uint8_t x = 0; x < 4; x++) {
-            if (game_state->field[y][x] == 0){
+            if(game_state->field[y][x] == 0) {
                 empty++;
             }
         }
     }
 
-    if (empty == 0) {
+    if(empty == 0) {
         return false;
     }
 
-    if (empty == 0) {
+    if(empty == 1) {
         // If it is 1 move before losing, we help the player and get rid of randomness.
         for(uint8_t y = 0; y < 4; y++) {
             for(uint8_t x = 0; x < 4; x++) {
-                if (game_state->field[y][x] == 0) {
+                if(game_state->field[y][x] == 0) {
                     bool haveFour =
-                    // +----X
-                    // |
-                    // |  field[x][y], 0 <= x, y <= 3
-                    // Y
-                    
-                    // up == 4 or
-                    (y > 0 && game_state->field[y - 1][x] == 2) ||
-                    // right == 4 or
-                    (x < 3 && game_state->field[y][x + 1] == 2) ||
-                    // down == 4
-                    (y < 3 && game_state->field[y + 1][x] == 2) ||
-                    // left == 4
-                    (x > 0 && game_state->field[y][x - 1] == 2);
-                    
+                        // +----X
+                        // |
+                        // |  field[x][y], 0 <= x, y <= 3
+                        // Y
 
-                    if (haveFour) {
+                        // up == 4 or
+                        (y > 0 && game_state->field[y - 1][x] == 2) ||
+                        // right == 4 or
+                        (x < 3 && game_state->field[y][x + 1] == 2) ||
+                        // down == 4
+                        (y < 3 && game_state->field[y + 1][x] == 2) ||
+                        // left == 4
+                        (x > 0 && game_state->field[y][x - 1] == 2);
+
+                    if(haveFour) {
                         game_state->field[y][x] = 2;
                         return true;
                     }
@@ -167,22 +165,41 @@ static bool game_2048_set_new_number(GameState *const game_state){
     uint8_t twoOrFore = rand() % 4 < 3;
     for(uint8_t y = 0; y < 4; y++) {
         for(uint8_t x = 0; x < 4; x++) {
-            if (target == 0) {
-                if (twoOrFore) {
-                    game_state->field[y][x] = 1; // 2^1 == 2  75%
-                } else {
-                    game_state->field[y][x] = 2; // 2^2 == 4  25%
+            if(game_state->field[y][x] == 0) {
+                if(target == 0) {
+                    if(twoOrFore) {
+                        game_state->field[y][x] = 1; // 2^1 == 2  75%
+                    } else {
+                        game_state->field[y][x] = 2; // 2^2 == 4  25%
+                    }
+                    goto exit;
                 }
-                goto exit;
+                target--;
             }
-            target--;
         }
     }
 exit:
     return true;
 }
 
-static void game_2048_process_move(GameState *const game_state) {
+// static void game_2048_process_row(uint8_t before[4], uint8_t *(after[4])) {
+//     // move 1 row left.
+//     for(uint8_t i = 0; i <= 2; i++) {
+//         if(before[i] != 0 && before[i] == before[i + 1]) {
+//             before[i]++;
+//             before[i + 1] = 0;
+//             i++;
+//         }
+//     }
+//     for(uint8_t i = 0, j = 0; i <= 3; i++) {
+//         if (before[i] != 0) {
+//             before[j] = before[i];
+//             i++;
+//         }
+//     }
+// }
+
+static void game_2048_process_move(GameState* const game_state) {
     memset(game_state->next_field, 0, sizeof(game_state->next_field));
     // +----X
     // |
@@ -190,83 +207,83 @@ static void game_2048_process_move(GameState *const game_state) {
     // Y
 
     // up
-    if (game_state->direction == DirectionUp) {
+    if(game_state->direction == DirectionUp) {
         for(uint8_t x = 0; x < 4; x++) {
             uint8_t next_y = 0;
             for(int8_t y = 0; y < 4; y++) {
                 uint8_t field = game_state->field[y][x];
-                if (field == 0) {
+                if(field == 0) {
                     continue;
                 }
 
-                if (game_state->next_field[next_y][x] == 0) {
+                if(game_state->next_field[next_y][x] == 0) {
                     game_state->next_field[next_y][x] = field;
                     continue;
                 }
 
-                if (field == game_state->next_field[next_y][x]) {
+                if(field == game_state->next_field[next_y][x]) {
                     game_state->next_field[next_y][x]++;
                     next_y++;
                     continue;
                 }
-                
+
                 next_y++;
                 game_state->next_field[next_y][x] = field;
-            }  
+            }
         }
     }
-    
+
     // right
-    if (game_state->direction == DirectionRight) {
+    if(game_state->direction == DirectionRight) {
         for(uint8_t y = 0; y < 4; y++) {
             uint8_t next_x = 3;
             for(int8_t x = 3; x >= 0; x--) {
                 uint8_t field = game_state->field[y][x];
-                if (field == 0) {
+                if(field == 0) {
                     continue;
                 }
 
-                if (game_state->next_field[y][next_x] == 0) {
+                if(game_state->next_field[y][next_x] == 0) {
                     game_state->next_field[y][next_x] = field;
                     continue;
                 }
 
-                if (field == game_state->next_field[y][next_x]) {
+                if(field == game_state->next_field[y][next_x]) {
                     game_state->next_field[y][next_x]++;
                     next_x--;
                     continue;
                 }
-                
+
                 next_x--;
                 game_state->next_field[y][next_x] = field;
             }
         }
     }
-    
+
     // down
-    if (game_state->direction == DirectionDown) {
+    if(game_state->direction == DirectionDown) {
         for(uint8_t x = 0; x < 4; x++) {
             uint8_t next_y = 3;
             for(int8_t y = 3; y >= 0; y--) {
                 uint8_t field = game_state->field[y][x];
-                if (field == 0) {
+                if(field == 0) {
                     continue;
                 }
 
-                if (game_state->next_field[next_y][x] == 0) {
+                if(game_state->next_field[next_y][x] == 0) {
                     game_state->next_field[next_y][x] = field;
                     continue;
                 }
 
-                if (field == game_state->next_field[next_y][x]) {
+                if(field == game_state->next_field[next_y][x]) {
                     game_state->next_field[next_y][x]++;
                     next_y--;
                     continue;
                 }
-                
+
                 next_y--;
                 game_state->next_field[next_y][x] = field;
-            }  
+            }
         }
     }
 
@@ -274,26 +291,26 @@ static void game_2048_process_move(GameState *const game_state) {
     // 1, 0, 0, 0
 
     // left
-    if (game_state->direction == DirectionLeft) {
+    if(game_state->direction == DirectionLeft) {
         for(uint8_t y = 0; y < 4; y++) {
             uint8_t next_x = 0;
             for(uint8_t x = 0; x < 4; x++) {
                 uint8_t field = game_state->field[y][x];
-                if (field == 0) {
+                if(field == 0) {
                     continue;
                 }
 
-                if (game_state->next_field[y][next_x] == 0) {
+                if(game_state->next_field[y][next_x] == 0) {
                     game_state->next_field[y][next_x] = field;
                     continue;
                 }
 
-                if (field == game_state->next_field[y][next_x]) {
+                if(field == game_state->next_field[y][next_x]) {
                     game_state->next_field[y][next_x]++;
                     next_x++;
                     continue;
                 }
-                
+
                 next_x++;
                 game_state->next_field[y][next_x] = field;
             }
@@ -328,7 +345,7 @@ int32_t game_2048_app(void* p) {
     Gui* gui = furi_record_open("gui");
     gui_add_view_port(gui, view_port, GuiLayerFullscreen);
 
-    game_state->direction = DirectionIdle;    
+    game_state->direction = DirectionIdle;
     game_2048_set_new_number(game_state);
     game_2048_set_new_number(game_state);
 
