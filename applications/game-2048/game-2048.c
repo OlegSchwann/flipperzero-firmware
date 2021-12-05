@@ -93,7 +93,7 @@ static void game_2048_render_callback(Canvas* const canvas, ValueMutex* const vm
                 canvas_set_color(canvas, ColorBlack);
                 canvas_draw_frame(canvas, XtoPx(x), YtoPx(y), 16, 16);
                 if(field != 0) {
-                    DrawNumberFor2048(canvas, XtoPx(x), YtoPx(y), 1 << field);
+                    game_2048_draw_number(canvas, XtoPx(x), YtoPx(y), 1 << field);
                 }
             }
         }

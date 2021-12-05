@@ -1,3 +1,3 @@
 #include <gui/canvas.h>
 
-void DrawNumberFor2048(Canvas* const canvas, uint8_t coord_x, uint8_t  coord_y, uint16_t number);
+void game_2048_draw_number(Canvas* const canvas, uint8_t x, uint8_t y, int number);

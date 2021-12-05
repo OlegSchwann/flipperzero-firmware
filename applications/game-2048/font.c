@@ -29,47 +29,48 @@ static uint8_t font[10][3] = {
     {0x9E, 0x92, 0xFE}, // 9;
 };
 
-#define FONT_HEIGHT 7
+#define FONT_HEIGHT 8
 #define FONT_WIDTH 3
 
-static void DrawPoint2048(Canvas* const canvas, uint8_t x, uint8_t y, bool is_filled) {
-    //point draw here
-    if (is_filled) {
-        canvas_set_color(canvas, ColorBlack);
-    } else {
-        canvas_set_color(canvas, ColorWhite);
-    }
+static void game_2048_draw_black_point(Canvas* const canvas, uint8_t x, uint8_t y) {
+    canvas_set_color(canvas, ColorBlack);
     canvas_draw_dot(canvas, x, y);
 }
 
-static void _DrawColumn2048(Canvas* const canvas, uint8_t digit, uint8_t x, uint8_t y, uint8_t column) {
-    for(uint8_t offset = 0; offset < FONT_HEIGHT; offset++) {
-        bool is_filled = (font[digit][column] >> offset) & 0x1;
-        DrawPoint2048(canvas, x, y + offset, is_filled);
-    }
-    DrawPoint2048(canvas, x, y + 8, false);
+static void game_2048_draw_white_square(Canvas* const canvas, uint8_t x, uint8_t y) {
+    canvas_set_color(canvas, ColorWhite);
+    canvas_draw_box(canvas, x, y, 15 - 1, 15 - 3);
 }
 
-static uint8_t _DrawDigit2048(Canvas* const canvas, uint8_t digit, uint8_t coord_x, uint8_t coord_y) {
+static void _game_2048_draw_column(
+    Canvas* const canvas,
+    int digit,
+    int coord_x,
+    int coord_y,
+    uint8_t column) {
+    for(int x = 0; x < FONT_HEIGHT; ++x) {
+        bool is_filled = (font[digit][column] >> x) & 0x1;
+        if(is_filled) {
+            game_2048_draw_black_point(canvas, coord_x, coord_y + x);
+        }
+    }
+}
+
+static uint8_t
+    _game_2048_draw_digit(Canvas* const canvas, uint8_t digit, uint8_t coord_x, uint8_t coord_y) {
     uint8_t x_shift = 0;
 
     if(digit != 1) {
         for(int column = 0; column < FONT_WIDTH; column++) {
-            _DrawColumn2048(canvas, digit, coord_x + column, coord_y, column);
+            _game_2048_draw_column(canvas, digit, coord_x + column, coord_y, column);
         }
         x_shift = 3;
     } else {
-        _DrawColumn2048(canvas, digit, coord_x, coord_y, true);
+        _game_2048_draw_column(canvas, digit, coord_x, coord_y, true);
         x_shift = 1;
     }
 
     return x_shift;
-}
-
-static void _DrawEmptyColumn2048(Canvas* const canvas, uint8_t coord_x, uint8_t coord_y) {
-    for(int y = 0; y < 9; ++y) {
-        DrawPoint2048(canvas, coord_x, coord_y + y, false);
-    }
 }
 
 /* We drawing text field with 1px white border
@@ -83,7 +84,7 @@ static void _DrawEmptyColumn2048(Canvas* const canvas, uint8_t coord_x, uint8_t 
  * digits should be at least 4 size
  * works from 1 to 9999
  */
-static void _ParseNumber2048(uint16_t number, uint8_t* digits, uint8_t* size) {
+static void _game_2048_parse_number(uint16_t number, uint8_t* digits, uint8_t* size) {
     *size = 0;
     uint16_t divider = 1000;
     //find first digit, result is highest divider
@@ -94,24 +95,61 @@ static void _ParseNumber2048(uint16_t number, uint8_t* digits, uint8_t* size) {
         }
     }
 
-    for (int i = 0; divider != 0; i++) {
+    for(int i = 0; divider != 0; i++) {
         digits[i] = number / divider;
         number %= divider;
         *size += 1;
-        divider /= 10;       
+        divider /= 10;
     }
 }
 
-void DrawNumberFor2048(Canvas* const canvas, uint8_t coord_x, uint8_t  coord_y, uint16_t number) {
-    _DrawEmptyColumn2048(canvas, coord_x, coord_y); //x = 0
-    coord_x++;
+uint8_t _game_2048_calculate_shift(uint16_t num) {
+    uint8_t shift = 0;
+    switch(num) {
+    case 1:
+        shift = 7;
+        break;
+    case 2:
+    case 4:
+    case 8:
+        shift = 6;
+        break;
+    case 16:
+        shift = 5;
+        break;
+    case 32:
+    case 64:
+        shift = 4;
+        break;
+    case 128:
+        shift = 3;
+        break;
+    case 256:
+        shift = 2;
+        break;
+    case 512:
+        shift = 3;
+        break;
+    case 1024:
+        shift = 2;
+        break;
+    }
+    return shift;
+}
 
+void game_2048_draw_number(Canvas* const canvas, uint8_t x, uint8_t y, int number) {
     uint8_t digits[4];
     uint8_t size;
-    _ParseNumber2048(number, digits, &size);
-    for(uint8_t i = 0; i < size; i++) {
-        coord_x += _DrawDigit2048(canvas, digits[i], coord_x, coord_y);
-        _DrawEmptyColumn2048(canvas, coord_x, coord_y);
-        coord_x++;
+
+    _game_2048_parse_number(number, digits, &size);
+    if(number > 512) {
+        game_2048_draw_white_square(canvas, x, y);
+    }
+
+    x += _game_2048_calculate_shift(number);
+    y += 4;
+    for(int i = 0; i < size; ++i) {
+        x += _game_2048_draw_digit(canvas, digits[i], x, y);
+        x++;
     }
 }
