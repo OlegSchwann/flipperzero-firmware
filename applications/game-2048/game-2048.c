@@ -182,6 +182,127 @@ exit:
     return true;
 }
 
+static void game_2048_process_move(GameState *const game_state) {
+    memset(game_state->next_field, 0, sizeof(game_state->next_field));
+    // +----X
+    // |
+    // |  field[x][y], 0 <= x, y <= 3
+    // Y
+
+    // up
+    if (game_state->direction == DirectionUp) {
+        for(uint8_t x = 0; x < 4; x++) {
+            uint8_t next_y = 0;
+            for(int8_t y = 0; y < 4; y++) {
+                uint8_t field = game_state->field[y][x];
+                if (field == 0) {
+                    continue;
+                }
+
+                if (game_state->next_field[next_y][x] == 0) {
+                    game_state->next_field[next_y][x] = field;
+                    continue;
+                }
+
+                if (field == game_state->next_field[next_y][x]) {
+                    game_state->next_field[next_y][x]++;
+                    next_y++;
+                    continue;
+                }
+                
+                next_y++;
+                game_state->next_field[next_y][x] = field;
+            }  
+        }
+    }
+    
+    // right
+    if (game_state->direction == DirectionRight) {
+        for(uint8_t y = 0; y < 4; y++) {
+            uint8_t next_x = 3;
+            for(int8_t x = 3; x >= 0; x--) {
+                uint8_t field = game_state->field[y][x];
+                if (field == 0) {
+                    continue;
+                }
+
+                if (game_state->next_field[y][next_x] == 0) {
+                    game_state->next_field[y][next_x] = field;
+                    continue;
+                }
+
+                if (field == game_state->next_field[y][next_x]) {
+                    game_state->next_field[y][next_x]++;
+                    next_x--;
+                    continue;
+                }
+                
+                next_x--;
+                game_state->next_field[y][next_x] = field;
+            }
+        }
+    }
+    
+    // down
+    if (game_state->direction == DirectionDown) {
+        for(uint8_t x = 0; x < 4; x++) {
+            uint8_t next_y = 0;
+            for(int8_t y = 3; y >= 0; y--) {
+                uint8_t field = game_state->field[y][x];
+                if (field == 0) {
+                    continue;
+                }
+
+                if (game_state->next_field[next_y][x] == 0) {
+                    game_state->next_field[next_y][x] = field;
+                    continue;
+                }
+
+                if (field == game_state->next_field[next_y][x]) {
+                    game_state->next_field[next_y][x]++;
+                    next_y--;
+                    continue;
+                }
+                
+                next_y--;
+                game_state->next_field[next_y][x] = field;
+            }  
+        }
+    }
+
+    // left
+    if (game_state->direction == DirectionLeft) {
+        for(uint8_t y = 0; y < 4; y++) {
+            uint8_t next_x = 0;
+            for(uint8_t x = 0; x < 4; x++) {
+                uint8_t field = game_state->field[y][x];
+                if (field == 0) {
+                    continue;
+                }
+
+                if (game_state->next_field[y][next_x] == 0) {
+                    game_state->next_field[y][next_x] = field;
+                    continue;
+                }
+
+                if (field == game_state->next_field[y][next_x]) {
+                    game_state->next_field[y][next_x]++;
+                    next_x++;
+                    continue;
+                }
+                
+                next_x++;
+                game_state->next_field[y][next_x] = field;
+            }
+        }
+    }
+
+    // <debug>
+    game_state->direction = DirectionIdle;
+    memcpy(game_state->field, game_state->next_field, sizeof(game_state->field));
+    // </debug>
+}
+
 int32_t game_2048_app(void* p) {
     int32_t return_code = 0;
 
@@ -208,7 +329,7 @@ int32_t game_2048_app(void* p) {
     game_2048_set_new_number(game_state);
     game_2048_set_new_number(game_state);
 
-    // <debug>
+    /* <debug>
     game_state->field[0][0] = 0;
     game_state->field[0][1] = 1;
     game_state->field[0][2] = 2;
@@ -228,7 +349,7 @@ int32_t game_2048_app(void* p) {
     game_state->field[3][1] = 0;
     game_state->field[3][2] = 0;
     game_state->field[3][3] = 0;
-    // </debug>
+    </debug> */
 
     InputEvent event;
     for(bool loop = true; loop;) {
@@ -238,13 +359,25 @@ int32_t game_2048_app(void* p) {
         if(event_status == osOK) {
             if(event.type == InputTypePress) {
                 switch(event.key) {
-                case InputKeyUp:;
+                case InputKeyUp:
+                    game_state->direction = DirectionUp;
+                    game_2048_process_move(game_state);
+                    game_2048_set_new_number(game_state);
                     break;
-                case InputKeyDown:;
+                case InputKeyDown:
+                    game_state->direction = DirectionDown;
+                    game_2048_process_move(game_state);
+                    game_2048_set_new_number(game_state);
                     break;
-                case InputKeyRight:;
+                case InputKeyRight:
+                    game_state->direction = DirectionRight;
+                    game_2048_process_move(game_state);
+                    game_2048_set_new_number(game_state);
                     break;
-                case InputKeyLeft:;
+                case InputKeyLeft:
+                    game_state->direction = DirectionLeft;
+                    game_2048_process_move(game_state);
+                    game_2048_set_new_number(game_state);
                     break;
                 case InputKeyOk:; // TODO: reinit in game ower state
                     break;
